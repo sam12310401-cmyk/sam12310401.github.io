@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<!--
+Created using JS Bin
+http://jsbin.com
+
+Copyright (c) 2025 by anonymous (http://jsbin.com/xucofaqanu/1/edit)
+
+Released under the MIT license: http://jsbin.mit-license.org
+-->
+<meta name="robots" content="noindex">
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>PRTS - Deep Space Awareness System</title>
+    <style>
+        :root {
+            --ark-blue: #00f2ff;
+            --ark-gold: #ffd700;
+            --ark-bg: rgba(5, 5, 15, 0.9);
+            --ark-border: rgba(0, 242, 255, 0.4);
+            --ark-terminal: #1a1a1a;
+        }
+
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #000; 
+            font-family: 'Consolas', 'Courier New', 'PingFang SC', sans-serif;
+            color: white; 
+            touch-action: none;
+        }
+
+        canvas { display: block; }
+
+        /* UI 系统层 */
+        #ui-layer {
+            position: absolute; inset: 0;
+            pointer-events: none;
+            padding: calc(20px + env(safe-area-inset-top)) 30px;
+            box-sizing: border-box;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* 顶部 PRTS 装饰栏 */
+        .top-header {
+            display: flex; justify-content: space-between;
+            border-left: 5px solid var(--ark-blue);
+            padding-left: 20px;
+            pointer-events: auto;
+        }
+        .sys-info { font-size: 11px; color: var(--ark-blue); letter-spacing: 2px; font-weight: bold; opacity: 0.8; }
+        .sys-title { font-size: 26px; font-weight: 900; margin-top: 5px; letter-spacing: 4px; color: #fff; text-shadow: 0 0 15px rgba(0, 242, 255, 0.5); }
+
+        /* 侧边档案面板 */
+        #planet-archive {
+            position: absolute;
+            right: -480px; top: 100px;
+            width: 400px; 
+            max-height: calc(100vh - 200px);
+            background: var(--ark-bg);
+            border: 1px solid var(--ark-border);
+            backdrop-filter: blur(35px);
+            pointer-events: auto;
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            padding: 30px;
+            border-radius: 2px;
+            box-shadow: -15px 0 60px rgba(0, 242, 255, 0.15);
+            overflow-y: auto;
+            clip-path: polygon(0 0, 100% 0, 100% 94%, 94% 100%, 0 100%);
+        }
+        #planet-archive.active { right: 30px; }
+
+        .archive-header { border-bottom: 2px solid var(--ark-blue); padding-bottom: 15px; margin-bottom: 20px; position: relative; }
+        .archive-header::after { content: "DATA_NODE_SECURED"; position: absolute; right: 0; bottom: -18px; font-size: 9px; color: var(--ark-blue); opacity: 0.5; }
+        .archive-title { font-size: 2.2rem; margin: 0; font-weight: 900; }
+        .archive-latin { font-size: 10px; color: var(--ark-blue); opacity: 0.7; letter-spacing: 3px; margin-top: 5px; text-transform: uppercase; }
+
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; }
+        .stat-item { background: rgba(0, 242, 255, 0.05); padding: 14px; border-left: 2px solid var(--ark-border); }
+        .stat-label { font-size: 9px; color: var(--ark-blue); opacity: 0.6; text-transform: uppercase; margin-bottom: 6px; }
+        .stat-value { font-size: 15px; font-weight: bold; letter-spacing: 1px; }
+
+        .archive-desc-box { position: relative; padding-top: 25px; border-top: 1px dashed var(--ark-border); }
+        .desc-tag { position: absolute; top: -10px; left: 10px; background: #05050f; padding: 0 10px; font-size: 10px; color: var(--ark-gold); font-weight: bold; }
+        .archive-desc { font-size: 14px; line-height: 1.8; opacity: 0.9; text-align: justify; color: #e0e0e0; }
+
+        /* 底部控制台 */
+        .bottom-ctrl {
+            display: flex; gap: 20px;
+            pointer-events: auto;
+            margin-bottom: env(safe-area-inset-bottom);
+        }
+        .ctrl-btn {
+            background: rgba(0,0,0,0.7); border: 1px solid var(--ark-border);
+            color: var(--ark-blue); padding: 16px 35px; font-size: 13px; cursor: pointer;
+            transition: all 0.3s; clip-path: polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%);
+            font-weight: 800; letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .ctrl-btn:active { background: var(--ark-blue); color: #000; transform: scale(0.96); }
+        .ctrl-btn.active { border-color: var(--ark-gold); color: var(--ark-gold); box-shadow: 0 0 15px rgba(255, 215, 0, 0.3); }
+
+        /* 行星浮动标签 */
+        .planet-tag {
+            position: absolute; color: var(--ark-blue); font-size: 13px;
+            padding: 5px 12px; background: rgba(0,0,0,0.85); border: 1px solid var(--ark-blue);
+            pointer-events: none; transform: translate(-50%, -150%);
+            white-space: nowrap; font-weight: bold; letter-spacing: 1px;
+            box-shadow: 0 0 10px rgba(0, 242, 255, 0.4);
+        }
+
+        /* PRTS 加载界面 */
+        #boot-screen {
+            position: fixed; inset: 0; background: #000; z-index: 1000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .boot-logo { color: var(--ark-blue); font-size: 4rem; font-weight: 900; letter-spacing: 20px; margin-bottom: 25px; text-shadow: 0 0 30px var(--ark-blue); }
+        .progress-container { width: 350px; height: 2px; background: rgba(255,255,255,0.05); position: relative; }
+        #progress-fill { width: 0%; height: 100%; background: var(--ark-blue); box-shadow: 0 0 20px var(--ark-blue); transition: width 0.1s linear; }
+        #init-btn { display: none; margin-top: 60px; background: none; border: 1px solid var(--ark-blue); color: var(--ark-blue); padding: 18px 50px; border-radius: 2px; cursor: pointer; letter-spacing: 8px; font-weight: bold; transition: 0.3s; }
+        #init-btn:hover { background: rgba(0, 242, 255, 0.15); box-shadow: 0 0 30px rgba(0, 242, 255, 0.2); }
+
+        #planet-archive::-webkit-scrollbar { width: 4px; }
+        #planet-archive::-webkit-scrollbar-thumb { background: var(--ark-blue); }
+    </style>
+</head>
+<body>
+
+    <!-- PRTS 初始化界面 -->
+    <div id="boot-screen">
+        <div class="boot-logo">PRTS</div>
+        <div style="font-size: 13px; letter-spacing: 5px; opacity: 0.7; color: var(--ark-blue);">NEURAL CONNECTIVITY ESTABLISHED</div>
+        <div style="font-size: 9px; opacity: 0.4; margin-top: 5px;">AUTHORIZATION: RHODES_ISLAND_EXECUTIVE</div>
+        <div class="progress-container" style="margin-top: 30px;"><div id="progress-fill"></div></div>
+        <button id="init-btn">接入神经链路</button>
+    </div>
+
+    <div id="ui-layer">
+        <div class="top-header">
+            <div>
+                <div class="sys-info">STATUS: ONLINE | DATA_STREAM: UNRESTRICTED</div>
+                <div class="sys-title">PRTS 核心星域态势感知系统</div>
+            </div>
+            <div style="text-align: right; opacity: 0.7; font-size: 11px; line-height: 1.5;">
+                NODE: RI_CENTRAL_CORE<br>
+                SECURITY_LEVEL: ALPHA<br>
+                <span id="timestamp" style="font-family: monospace;"></span>
+            </div>
+        </div>
+
+        <!-- 侧边信息矩阵 -->
+        <div id="planet-archive">
+            <div class="archive-header">
+                <h2 id="p-name" class="archive-title">---</h2>
+                <div id="p-latin" class="archive-latin">WAITING_FOR_TARGET...</div>
+            </div>
+            <div class="stat-grid">
+                <div class="stat-item"><div class="stat-label">质量 (Mass)</div><div id="p-mass" class="stat-value">-</div></div>
+                <div class="stat-item"><div class="stat-label">重力场强度</div><div id="p-gravity" class="stat-value">-</div></div>
+                <div class="stat-item"><div class="stat-label">轨道回归期</div><div id="p-period" class="stat-value">-</div></div>
+                <div class="stat-item"><div class="stat-label">观测表面温标</div><div id="p-temp" class="stat-value">-</div></div>
+                <div class="stat-item"><div class="stat-label">第一宇宙速度</div><div id="p-escape" class="stat-value">-</div></div>
+                <div class="stat-item"><div class="stat-label">核心成分特征</div><div id="p-core" class="stat-value">-</div></div>
+            </div>
+            <div class="archive-desc-box">
+                <span class="desc-tag">PRTS 深度探测日志</span>
+                <div id="p-desc" class="archive-desc">请从导航视图中选择目标天体以启动数据同步。</div>
+            </div>
+        </div>
+
+        <div class="bottom-ctrl">
+            <button id="ai-btn" class="ctrl-btn" onclick="toggleAI()">神经突触解析: <span id="ai-status">OFF</span></button>
+            <button class="ctrl-btn" onclick="toggleTime()">仿真流速: <span id="time-val">1x</span></button>
+            <button class="ctrl-btn" onclick="resetCam()">复位坐标系</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        const apiKey = "";
+        let scene, camera, renderer, controls, clock;
+        let planets = [], stars, sun;
+        let timeScale = 1;
+        let aiActive = false;
+
+        const SOLAR_DATABASE = {
+            '太阳': { r: 35, d: 0, speed: 0, color: 0xffaa00, latin: 'SOL / STAR_CORE', mass: '1.989e30', gravity: '274.0', period: 'N/A', temp: '5500°C', escape: '617.5 km/s', core: '核聚变核心', desc: '系统唯一的能量供给源。PRTS 监测到其内部氢核聚变反应极度稳定。引力场强度足以维持周边所有节点的闭合运动。' },
+            '水星': { r: 4.5, d: 70, speed: 4.7, color: 0x8c8c8c, latin: 'MERCURY / NODE_01', mass: '3.301e23', gravity: '3.7', period: '88 Days', temp: '167°C', escape: '4.3 km/s', core: '铁质大核心', desc: '距离核心最近的固态节点。表面受高能粒子辐射严重。大气稀薄度超出 PRTS 常规生命保障系统的阈值。' },
+            '金星': { r: 9, d: 110, speed: 3.5, color: 0xe3bb76, latin: 'VENUS / NODE_02', mass: '4.867e24', gravity: '8.87', period: '224.7 Days', temp: '464°C', escape: '10.36 km/s', core: '熔融铁核', desc: '极高压温室环境。其稠密的大气对雷达探测信号具有强烈的吸收作用，地表环境被 PRTS 评估为"极端危险"。' },
+            '地球': { r: 10, d: 160, speed: 2.9, color: 0x2233ff, latin: 'TERRA / ORIGIN', mass: '5.972e24', gravity: '9.81', period: '365.2 Days', temp: '15°C', escape: '11.18 km/s', core: '固态铁镍', desc: '母星。PRTS 记录中唯一拥有完整生物圈及稳定源石能源分布（模拟数据）的天体。受地磁层保护，是罗德岛的首选观测基准点。' },
+            '火星': { r: 6, d: 210, speed: 2.4, color: 0xff5533, latin: 'MARS / FORWARD_BASE', mass: '6.390e23', gravity: '3.71', period: '687 Days', temp: '-65°C', escape: '5.03 km/s', core: '液态核心', desc: '前哨观测站。表面存在大量氧化铁沉积。PRTS 在其极地冰盖中检测到微弱的水分子活动迹象。' },
+            '木星': { r: 24, d: 300, speed: 1.3, color: 0xd39c7e, latin: 'JUPITER / HEAVY_NODE', mass: '1.898e27', gravity: '24.79', period: '11.86 Years', temp: '-110°C', escape: '59.5 km/s', core: '金属氢', desc: '气态巨天体。庞大的引力捕获了大量卫星，其电磁环境会对 PRTS 通讯链路产生严重干扰。' },
+            '土星': { r: 20, d: 380, speed: 0.9, color: 0xc5ab6e, latin: 'SATURN / RING_NODE', mass: '5.683e26', gravity: '10.44', period: '29.45 Years', temp: '-140°C', escape: '35.5 km/s', core: '冰质核心', desc: '系统内最具特征的环状结构天体。主要由冰晶与岩屑构成。PRTS 建议将土卫六作为二级能源采集点。', ring: true },
+            '天王星': { r: 14, d: 460, speed: 0.6, color: 0xb5e3e3, latin: 'URANUS / TILT_NODE', mass: '8.681e25', gravity: '8.69', period: '84 Years', temp: '-195°C', escape: '21.3 km/s', core: '冰质地幔', desc: '冰巨星。自转轴发生严重偏移，推测在 PRTS 记录之前曾发生过大规模天体碰撞。' },
+            '海王星': { r: 14, d: 530, speed: 0.5, color: 0x4b70dd, latin: 'NEPTUNE / REMOTE_NODE', mass: '1.024e26', gravity: '11.15', period: '164.8 Years', temp: '-201°C', escape: '23.5 km/s', core: '冰质地幔', desc: '极边境节点。深蓝色大气主要由甲烷构成。PRTS 在其大气高层观测到了时速超 2000 公里的超音速风暴。' }
+        };
+
+        // 更新 UI 时间戳
+        setInterval(() => {
+            const d = new Date();
+            document.getElementById('timestamp').innerText = `LOCAL_TIME: ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
+        }, 1000);
+
+        async function boot() {
+            const fill = document.getElementById('progress-fill');
+            const btn = document.getElementById('init-btn');
+            for(let i=0; i<=100; i+=Math.random()*6) {
+                fill.style.width = Math.min(i, 100) + '%';
+                await new Promise(r => setTimeout(r, 25));
+            }
+            btn.style.display = 'block';
+            btn.onclick = () => {
+                document.getElementById('boot-screen').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('boot-screen').style.display = 'none';
+                    init();
+                }, 1000);
+            };
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 1, 30000);
+            camera.position.set(0, 800, 1500);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
+            document.body.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.04;
+            controls.maxDistance = 10000;
+
+            clock = new THREE.Clock();
+
+            // 光照
+            scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+            const sunLight = new THREE.PointLight(0xffffff, 3.5, 6000);
+            scene.add(sunLight);
+
+            // 太阳主体
+            sun = new THREE.Mesh(
+                new THREE.SphereGeometry(35, 128, 128),
+                new THREE.MeshBasicMaterial({ color: 0xffcc00 })
+            );
+            sun.userData = { name: '太阳' };
+            scene.add(sun);
+
+            // 太阳发光贴图模拟
+            sun.add(createGlow(180));
+
+            createStars();
+            buildSolarSystem();
+
+            window.addEventListener('resize', onResize);
+            renderer.domElement.addEventListener('pointerdown', onInteract);
+            
+            animate();
+        }
+
+        function createStars() {
+            const geo = new THREE.BufferGeometry();
+            const count = 30000; 
+            const pos = new Float32Array(count * 3);
+            for(let i=0; i<count*3; i++) pos[i] = (Math.random()-0.5)*15000;
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            stars = new THREE.Points(geo, new THREE.PointsMaterial({ size: 1.8, color: 0xffffff, transparent: true, opacity: 0.9 }));
+            scene.add(stars);
+        }
+
+        function createGlow(size) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(128,128,0,128,128,128);
+            grad.addColorStop(0,'rgba(255,255,220,1)');
+            grad.addColorStop(0.3,'rgba(255,200,0,0.4)');
+            grad.addColorStop(1,'rgba(255,50,0,0)');
+            ctx.fillStyle = grad; ctx.fillRect(0,0,256,256);
+            const mat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), blending: THREE.AdditiveBlending });
+            const sprite = new THREE.Sprite(mat);
+            sprite.scale.set(size, size, 1);
+            return sprite;
+        }
+
+        function buildSolarSystem() {
+            Object.keys(SOLAR_DATABASE).forEach(name => {
+                if(name === '太阳') return;
+                const data = SOLAR_DATABASE[name];
+                const orbitGroup = new THREE.Group();
+                scene.add(orbitGroup);
+
+                const mesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(data.r, 64, 64),
+                    new THREE.MeshStandardMaterial({ 
+                        color: data.color, 
+                        roughness: 0.6, 
+                        metalness: 0.3,
+                        emissive: data.color,
+                        emissiveIntensity: 0.08
+                    })
+                );
+                mesh.position.x = data.d;
+                mesh.userData = { name: name };
+                orbitGroup.add(mesh);
+
+                if(data.ring) {
+                    const rMat = new THREE.MeshBasicMaterial({ color: 0x888888, side: THREE.DoubleSide, transparent: true, opacity: 0.35 });
+                    const ring = new THREE.Mesh(new THREE.RingGeometry(data.r * 1.5, data.r * 3.2, 128), rMat);
+                    ring.rotation.x = Math.PI/2.5;
+                    mesh.add(ring);
+                }
+
+                // 轨道线
+                const orbit = new THREE.LineLoop(
+                    new THREE.BufferGeometry().setFromPoints(new THREE.Path().absarc(0, 0, data.d, 0, Math.PI * 2).getPoints(512)),
+                    new THREE.LineBasicMaterial({ color: 0x00f2ff, transparent: true, opacity: 0.12 })
+                );
+                orbit.rotation.x = Math.PI/2;
+                scene.add(orbit);
+
+                // 悬浮标签
+                const tag = document.createElement('div');
+                tag.className = 'planet-tag';
+                tag.innerText = name;
+                tag.style.display = 'none';
+                document.body.appendChild(tag);
+
+                planets.push({ group: orbitGroup, mesh, data, tag });
+            });
+        }
+
+        function onInteract(e) {
+            const mouse = new THREE.Vector2((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
+            const ray = new THREE.Raycaster();
+            ray.setFromCamera(mouse, camera);
+            const targets = planets.map(p => p.mesh).concat([sun]);
+            const intersects = ray.intersectObjects(targets);
+
+            if (intersects.length > 0) {
+                openArchive(intersects[0].object.userData.name);
+            } else {
+                closeArchive();
+            }
+        }
+
+        async function openArchive(name) {
+            const data = SOLAR_DATABASE[name];
+            document.getElementById('p-name').innerText = name;
+            document.getElementById('p-latin').innerText = data.latin;
+            document.getElementById('p-mass').innerText = data.mass + " KG";
+            document.getElementById('p-gravity').innerText = data.gravity + " M/S²";
+            document.getElementById('p-period').innerText = data.period;
+            document.getElementById('p-temp').innerText = data.temp;
+            document.getElementById('p-escape').innerText = data.escape;
+            document.getElementById('p-core').innerText = data.core;
+            
+            const desc = document.getElementById('p-desc');
+            desc.innerHTML = data.desc + "<br><br><span style='color:var(--ark-blue)'>[PRTS 数据同步链路已锁定]</span>";
+            document.getElementById('planet-archive').classList.add('active');
+
+            if(aiActive) {
+                desc.innerHTML += "<br><span style='color:var(--ark-gold); font-size:10px;'>[正在调取神经突触深度模拟数据...]</span>";
+                const aiLog = await fetchAIInfo(name);
+                desc.innerHTML = data.desc + "<br><br><span style='color:var(--ark-gold)'>[PRTS 神经解析日志]:</span><br>" + aiLog;
+            }
+        }
+
+        async function fetchAIInfo(pName) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const prompt = `你是PRTS（罗德岛 Preliminary Reconnaissance and Target Analysis System）。请为天体 ${pName} 提供一段具有罗德岛干员报告风格的深度探测摘要，语调要专业、理性、略带科幻感（不超过60字）。`;
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                const res = await response.json();
+                return res.candidates?.[0]?.content?.parts?.[0]?.text;
+            } catch(e) { return "外部神经网络链接超时。请检查数据终端状态。"; }
+        }
+
+        function closeArchive() {
+            document.getElementById('planet-archive').classList.remove('active');
+        }
+
+        function toggleAI() {
+            aiActive = !aiActive;
+            const btn = document.getElementById('ai-btn');
+            document.getElementById('ai-status').innerText = aiActive ? "ON" : "OFF";
+            if(aiActive) btn.classList.add('active'); else btn.classList.remove('active');
+            planets.forEach(p => p.tag.style.display = aiActive ? 'block' : 'none');
+        }
+
+        function toggleTime() {
+            const rates = [1, 5, 25, 125];
+            timeScale = rates[(rates.indexOf(timeScale) + 1) % rates.length];
+            document.getElementById('time-val').innerText = timeScale + 'x';
+        }
+
+        function resetCam() {
+            camera.position.set(0, 800, 1500);
+            controls.target.set(0,0,0);
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+
+            planets.forEach(p => {
+                p.group.rotation.y += p.data.speed * 0.005 * timeScale * dt * 60;
+                p.mesh.rotation.y += 0.02 * timeScale;
+
+                if(aiActive) {
+                    const vec = p.mesh.getWorldPosition(new THREE.Vector3()).project(camera);
+                    const x = (vec.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (-(vec.y * 0.5 - 0.5)) * window.innerHeight;
+                    p.tag.style.left = `${x}px`;
+                    p.tag.style.top = `${y}px`;
+                    
+                    const dist = camera.position.distanceTo(p.mesh.getWorldPosition(new THREE.Vector3()));
+                    p.tag.style.opacity = Math.max(0, 1 - dist/5000);
+                }
+            });
+
+            sun.rotation.y += 0.005;
+            stars.rotation.y += 0.0002 * dt;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = boot;
+    </script>
+</body>
+</html>
